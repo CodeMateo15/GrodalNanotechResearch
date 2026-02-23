@@ -1,0 +1,11 @@
+- Add more columns based on Prof. Grodal's list (made later) (space, electronics, artificial intelligence, photonics, biotech/biology(?), semiconductors, robotics, computers/computing, material science, cleantech, hypertext, internet, chemistry, physics)
+
+- Add title and body of text column
+
+- Remove time stamp from date column
+
+- date for government are chronological (some might be old to new, or new to old)
+
+- scrape text from body, not title or references
+
+- 1983 - 2005? Discard 2006
