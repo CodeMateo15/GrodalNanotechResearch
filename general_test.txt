@@ -1,0 +1,42 @@
+References and Notes
+
+    * 1. N. C. Seeman, Nature 421, 427 (2003). [CrossRef] [ISI] [Medline]
+    * 2. Commercial oligonucleotide synthesis costs ~50  per base for several nanomoles and, at its simplest, fabrication requires only mixing of aqueous solutions.
+    * 3. E. Winfree, F. R. Liu, L. A. Wenzler, N. C. Seeman, Nature 394, 539 (1998). [CrossRef] [ISI] [Medline]
+    * 4. J. Malo et al., Angew. Chem. Int. Ed. 44, 3057 (2005). [CrossRef] [ISI]
+    * 5. H. Yan, S. H. Park, G. Finkelstein, J. H. Reif, T. H. LaBean, Science 301, 1882 (2003).[Abstract/Free Full Text]
+    * 6. J. H. Chen, N. C. Seeman, Nature 350, 631 (1991). [CrossRef] [ISI] [Medline]
+    * 7. Y. W. Zhang, N. C. Seeman, J. Am. Chem. Soc. 116, 1661 (1994). [CrossRef] [ISI]
+    * 8. W. M. Shih, J. D. Quispe, G. F. Joyce, Nature 427, 618 (2004). [CrossRef] [ISI] [Medline]
+    * 9. M. Scheffler, A. Dorenbeck, S. Jordan, M. W stefeld, G. von Kiedrowski, Angew. Chem. Int. Ed. 38, 3312 (1999). [ISI]
+    * 10. A. Dorenbeck, thesis, Ruhr-Universit t Bochum (2000).
+    * 11. X. Zhang, H. Yan, Z. Y. Shen, N. C. Seeman, J. Am. Chem. Soc. 124, 12940 (2002). [CrossRef] [ISI] [Medline]
+    * 12. In a preliminary communication (25), we introduced a tetrahedral nanostructure with nicks positioned such that helices could separate and unwind at the vertices; this construct was not expected to resist deformation.
+    * 13. See supporting data on Science Online.
+    * 14. J. H. Conway, in Computation Problems in Abstract Algebra, J. Leech, Ed. (Pergamon, Oxford, 1970).
+    * 15. C. Bustamante, J. F. Marko, E. D. Siggia, S. Smith, Science 265, 1599 (1994). [ISI] [Medline]
+    * 16. S. B. Smith, Y. Cui, C. Bustamante, Science 271, 795 (1996).[Abstract]
+    * 17. M. D. Wang, H. Yin, R. Landick, J. Gelles, S. M. Block, Biophys. J. 72, 1335 (1997).[Abstract]
+    * 18. C. G. Baumann, S. B. Smith, V. A. Bloomfield, C. Bustamante, Proc. Natl. Acad. Sci. U.S.A. 94, 6185 (1997).[Abstract/Free Full Text]
+    * 19. T. E. Cloutier, J. Widom, Proc. Natl. Acad. Sci. U.S.A. 102, 3645 (2005).[Abstract/Free Full Text]
+    * 20. Q. Du, C. Smith, N. Shiffeldrim, M. Vologodskaia, A. Vologodskii, Proc. Natl. Acad. Sci. U.S.A. 102, 5397 (2005).[Abstract/Free Full Text]
+    * 21. M. E. Hogan, R. H. Austin, Nature 329, 263 (1987). [CrossRef] [ISI] [Medline]
+    * 22. F. H. C. Crick, A. Klug, Nature 255, 530 (1975). [CrossRef] [ISI] [Medline]
+    * 23. J. Yan, J. F. Marko, Phys. Rev. Lett. 93, 108108 (2004). [CrossRef] [Medline]
+    * 24. P. A. Wiggins, R. Phillips, P. C. Nelson, Phys. Rev. E 71, 021909 (2005). [CrossRef]
+    * 25. R. P. Goodman, R. M. Berry, A. J. Turberfield, Chem. Commun. 2004, 1372 (2004). [CrossRef]
+    * 26. We thank J. Johannes for advice on the topology of circular catenanes. Supported by the UK Biotechnology and Biological Sciences Research Council, Engineering and Physical Sciences Research Council, Medical Research Council, and Ministry of Defence (through the UK Bionanotechnology Interdisciplinary Research Collaboration); the Oxford Life Sciences Interface Doctoral Training Centre; the Rhodes Trust; the Natural Sciences and Engineering Research Council of Canada; and the Foundation for Fundamental Research on Matter (FOM).
+
+Supporting Online Material
+
+www.sciencemag.org/cgi/content/full/310/5754/1661/DC1
+
+Materials and Methods
+
+SOM Text
+
+Figs. S1 to S5
+
+References
+
+Received for publication 20 September 2005. Accepted for publication 7 November 2005.
