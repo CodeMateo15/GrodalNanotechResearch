@@ -28,10 +28,10 @@ from openpyxl.styles import Font, PatternFill, Alignment
 #                    (good for Science Research, Science News)
 #
 FILE_SOURCE_MAP = {
-    "govt_test.txt":    ("Government",       1, "first_line"),
-    "Sci_res_test.txt": ("Science Research", 3, "after_label"),
-    # "government.txt":    ("Government",       1, "first_line"),
-    # "Science_research.txt": ("Science Research", 3, "after_label"),
+    # "govt_test.txt":    ("Government",       1, "first_line"),
+    # "Sci_res_test.txt": ("Science Research", 3, "after_label"),
+    "government.txt":    ("Government",       1, "first_line"),
+    "Science_research.txt": ("Science Research", 3, "after_label"),
     # "news_test.txt":  ("Newspapers",       2, "first_line"),
     # "scin_test.txt":  ("Science News",     4, "after_label"),
 }
@@ -42,7 +42,7 @@ YEAR_MIN = 1983
 YEAR_MAX = 2005
 
 # Name of the output Excel file (saved in the same folder as this script)
-OUTPUT_FILE = "outputV3.xlsx"
+OUTPUT_FILE = "RealOutputV3.xlsx"
 
 # ── END CONFIGURATION ─────────────────────────────────────────────────────────
 

@@ -9,3 +9,10 @@
 		- 1 based on if *nano* >= 1
 		- 1 based on if *nano* <= 0
 		- a bunch based on each keyword other than nano
+
+- Check nanotech column and how it counts
+
+- Histogram of # of words per year and articles per year
+	- check 1995-1996 for weird gap in data
+
+- Chart to compare nanotech* with other keyboards
