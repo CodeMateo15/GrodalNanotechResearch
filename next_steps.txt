@@ -9,6 +9,7 @@
 		- 1 based on if *nano* >= 1
 		- 1 based on if *nano* <= 0
 		- a bunch based on each keyword other than nano
+	- DO FOR ALL SOURCES
 
 - Check nanotech column and how it counts
 
@@ -16,3 +17,5 @@
 	- check 1995-1996 for weird gap in data
 
 - Chart to compare nanotech* with other keyboards
+
+- Fix issue where just one asterisk (*) separates articles
