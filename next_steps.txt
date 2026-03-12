@@ -1,8 +1,3 @@
-- Date for government are chronological (some might be old to new, or new to old)
-	- Grab dates from original excel file
-
-- Categorize different sources
-
 - Make graphs
 	- separate based on source and percentage of articles per year
 		- 1 based on just nanotech*
@@ -11,11 +6,4 @@
 		- a bunch based on each keyword other than nano
 	- DO FOR ALL SOURCES
 
-- Check nanotech column and how it counts
-
-- Histogram of # of words per year and articles per year
-	- check 1995-1996 for weird gap in data
-
 - Chart to compare nanotech* with other keyboards
-
-- Fix issue where just one asterisk (*) separates articles
