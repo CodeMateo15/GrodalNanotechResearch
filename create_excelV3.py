@@ -21,19 +21,21 @@ from openpyxl.styles import Font, PatternFill, Alignment
 #   (source_name, source_number, title_style)
 #
 # title_style options:
-#   "first_line"   — use the first non-blank line of the chunk as the title
-#                    (good for Government, Business, Newspapers, etc.)
-#   "after_label"  — use the line after a section label like "Reports" or
-#                    "Policy Forum" as the title
-#                    (good for Science Research, Science News)
+#   "first_line"     — use the first non-blank line of the chunk as the title
+#                      (good for Government, Newspapers, etc.)
+#   "after_label"    — use the line after a section label like "Reports" or
+#                      "Policy Forum" as the title
+#                      (good for Science Research, Science News)
+#   "business_press" — use sequential "Article N" as the title; body starts
+#                      after the Copyright line
+#                      (good for Business Press, Business Week, WSJ, etc.)
 #
 FILE_SOURCE_MAP = {
-    # "govt_test.txt":    ("Government",       1, "first_line"),
-    # "Sci_res_test.txt": ("Science Research", 3, "after_label"),
-    "government.txt":    ("Government",       1, "first_line"),
+    "government.txt":       ("Government",       1, "first_line"),
     "Science_research.txt": ("Science Research", 3, "after_label"),
-    # "news_test.txt":  ("Newspapers",       2, "first_line"),
-    # "scin_test.txt":  ("Science News",     4, "after_label"),
+    "business_press.txt":   ("Business Press",   2, "business_press"),
+    # "news_test.txt":      ("Newspapers",       2, "first_line"),
+    # "scin_test.txt":      ("Science News",     4, "after_label"),
 }
 
 # Only keep articles dated within this year range.
@@ -42,23 +44,30 @@ YEAR_MIN = 1983
 YEAR_MAX = 2005
 
 # Name of the output Excel file (saved in the same folder as this script)
-OUTPUT_FILE = "RealOutputV3.xlsx"
+OUTPUT_FILE = "output.xlsx"
 
 # ── END CONFIGURATION ─────────────────────────────────────────────────────────
 
-SEPARATOR = re.compile(r'\*{5,}')
+# Separator must be 5+ asterisks that are the ONLY non-whitespace content on
+# their line — prevents stray * in bullet points or footnotes from splitting.
+SEPARATOR = re.compile(r'^\s*\*{5,}\s*$', re.MULTILINE)
 
 # Section labels that precede the title in Science-style files
 SECTION_LABELS = re.compile(
-    r'^(Reports?|Policy\s+Forum|News|Perspective|Review|Letter|Editorial|Research\s+Article|Brief\s+Communication)$',
+    r'^(Reports?|Policy\s+Forum|News|Perspective|Review|Letter|Editorial|'
+    r'Research\s+Article|Brief\s+Communication)$',
     re.IGNORECASE
 )
 
 # Lines that signal the start of a references/notes section to strip
 REFERENCES_START = re.compile(
-    r'^(References(\s+and\s+Notes)?|Bibliography|Notes|Supporting\s+(Online\s+)?Material|SOM\s+Text|Acknowledgements?|Supplementary)$',
+    r'^(References(\s+and\s+Notes)?|Bibliography|Notes|Supporting\s+(Online\s+)?Material|'
+    r'SOM\s+Text|Acknowledgements?|Supplementary)$',
     re.IGNORECASE
 )
+
+# Copyright line marks end of metadata in business press articles
+COPYRIGHT_LINE = re.compile(r'^\(?\s*Copyright', re.IGNORECASE)
 
 DATE_PATTERNS = [
     (r'\b(\d{1,2}\s+\w+\s+\d{4})\b',   '%d %B %Y'),
@@ -75,10 +84,22 @@ MONTH_NAMES = {
 }
 
 # Keywords for each topic column — add/remove terms as needed
+#
+# Each value is a list of Python regular-expression patterns used to
+# search the article body. Notes for future edits:
+# - Patterns are applied with `re.IGNORECASE` so no need for case variants.
+# - Use `\b` to anchor word boundaries. Example:
+#     r'\bnano\b'  -> matches the whole word "nano" only (not "nanotech").
+# - Use `\w*` to match word characters after a stem. Example:
+#     r'\bnano\w*' -> matches "nano", "nanotech", "nano123",
+#     "nano_scale" but NOT "nano-scale" (hyphen is not a word character).
+# - To include hyphens or dots, extend the character class:
+#     r'\bnano[\w.-]*'  to allow "nano-scale" or "nano.tech".
+#
 TOPIC_KEYWORDS = {
     "Space":            [r'\bspace\b', r'\bsatellite', r'\baerospace', r'\borbit', r'\brocket', r'\bnasa\b', r'\bspacecraft'],
     "Electronics":      [r'\belectronic', r'\bsemiconductor', r'\bcircuit', r'\btransistor', r'\bdiode', r'\bchip\b'],
-    "Artificial Intelligence": [r'\bartificial intelligence\b', r'\bmachine learning\b', r'\bneural network', r'\bdeep learning\b', r'\bai\b'],
+    "Artificial Intelligence": [r'\bartificial intelligence\b', r'\bmachine learning\b', r'\bneural network', r'\bdeep learning\b', r'\bai\b', r'\bgradient descent\b'],
     "Photonics":        [r'\bphotonic', r'\boptical\b', r'\blaser', r'\bfiber optic', r'\bphoton'],
     "Biotech/Biology":  [r'\bbiotech', r'\bbiology\b', r'\bbiological\b', r'\bgenetic', r'\bgenome', r'\bprotein\b', r'\bcell\b', r'\bbacterial'],
     "Semiconductors":   [r'\bsemiconductor', r'\bsilicon\b', r'\bgallium', r'\bdoping\b', r'\bwafer'],
@@ -90,7 +111,9 @@ TOPIC_KEYWORDS = {
     "Internet":         [r'\binternet\b', r'\bonline\b', r'\bworld wide web\b', r'\bbroadband', r'\bnetwork\b'],
     "Chemistry":        [r'\bchemi', r'\bmolecul', r'\breaction\b', r'\bcatalys', r'\bcompound\b', r'\bsynthes'],
     "Physics":          [r'\bphysics\b', r'\bphysical\b', r'\bquantum\b', r'\bthermodynamic', r'\bmechanics\b', r'\belectromagnet'],
-    "Nanotech":         [r'\bnanotech'],
+    # "Nanotech" should capture variants like "nanotechnology".
+    "Nanotech":         [r'\bnanotech\w*'],
+    # "Nano" uses \w* to capture "nano", "nanotech", "nano123", etc.
     "Nano":             [r'\bnano\w*'],
 }
 
@@ -131,7 +154,7 @@ def strip_references(text):
     return text, ""
 
 
-def extract_title(chunk, title_style):
+def extract_title(chunk, title_style, article_num=None):
     lines = get_non_blank_lines(chunk)
     if not lines:
         return ""
@@ -144,6 +167,9 @@ def extract_title(chunk, title_style):
             if SECTION_LABELS.match(line) and i + 1 < len(lines):
                 return lines[i + 1]
         return lines[0]
+
+    elif title_style == "business_press":
+        return f"Article {article_num}"
 
     return lines[0]
 
@@ -173,6 +199,14 @@ def extract_body(chunk, title_style):
             title_idx = non_blank[0][0]
             raw = "\n".join(lines[title_idx + 1:]).strip()
 
+    elif title_style == "business_press":
+        # Body starts on the line after the Copyright line
+        raw = chunk  # fallback
+        for i, line in enumerate(lines):
+            if COPYRIGHT_LINE.match(line.strip()):
+                raw = "\n".join(lines[i + 1:]).strip()
+                break
+
     else:
         raw = chunk
 
@@ -194,6 +228,8 @@ def parse_articles(filepath, source_name, source_num, title_style):
 
     rows = []
     skipped = 0
+    article_num = 0  # counter for business_press sequential titles
+
     for chunk in chunks:
         date = extract_date(chunk)
         year = date.year if date else None
@@ -202,7 +238,8 @@ def parse_articles(filepath, source_name, source_num, title_style):
             skipped += 1
             continue
 
-        title = extract_title(chunk, title_style)
+        article_num += 1
+        title = extract_title(chunk, title_style, article_num=article_num)
         body, refs = extract_body(chunk, title_style)
 
         row = {
@@ -210,12 +247,11 @@ def parse_articles(filepath, source_name, source_num, title_style):
             'Year':       year,
             'Sources':    source_num,
             'Name':       source_name,
-            'Word count': count_words(body),   # word count of body only
+            'Word count': count_words(body),
             'Title':      title,
             'Body':       body,
             'References': refs,
         }
-        # All keyword counts are based on body only
         for topic, patterns in TOPIC_KEYWORDS.items():
             row[topic] = count_keyword(body, patterns)
 
@@ -251,9 +287,7 @@ def write_excel(all_rows, output_path):
             col_name = df.columns[col_idx - 1]
             if col_name == 'Title':
                 ws.column_dimensions[col_letter].width = 40
-            elif col_name == 'References':
-                ws.column_dimensions[col_letter].width = 60
-            elif col_name == 'Body':
+            elif col_name in ('Body', 'References'):
                 ws.column_dimensions[col_letter].width = 60
             else:
                 ws.column_dimensions[col_letter].width = fixed_widths.get(col_letter, 16)
