@@ -5,5 +5,12 @@
 		- 1 based on if *nano* <= 0
 		- a bunch based on each keyword other than nano
 	- DO FOR ALL SOURCES
+	- Nanotech* >= 1 and co-occurance with all the other keywords
+		- Line graphs too?
 
-- Chart to compare nanotech* with other keyboards
+- Check out futurists why it ended in 2004-2005
+
+- Business why only in 2005?
+	- Map out date like government
+
+- Fix 1995-1996 science research issue with splitting articles on *
