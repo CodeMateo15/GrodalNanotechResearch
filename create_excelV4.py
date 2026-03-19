@@ -114,8 +114,9 @@ TOPIC_KEYWORDS = {
     "Cleantech":        [r'\bcleantech\b', r'\brenewable', r'\bsolar\b', r'\bwind energy', r'\bclean energy', r'\bgreen tech', r'\bhydrogen fuel'],
     "Hypertext":        [r'\bhypertext\b', r'\bhyperlink', r'\bhtml\b', r'\bweb page', r'\bwww\b'],
     "Internet":         [r'\binternet\b', r'\bonline\b', r'\bworld wide web\b', r'\bbroadband', r'\bnetwork\b'],
-    "Chemistry":        [r'\bchemi', r'\bmolecul', r'\breaction\b', r'\bcatalys', r'\bcompound\b', r'\bsynthes'],
+    "Chemistry":        [r'\bchemi', r'\breaction\b', r'\bcatalys', r'\bcompound\b', r'\bsynthes'],
     "Physics":          [r'\bphysics\b', r'\bphysical\b', r'\bquantum\b', r'\bthermodynamic', r'\bmechanics\b', r'\belectromagnet'],
+    "Engineering":      [r'\bengineering\b'],
     "Nanotech":         [r'\bnanotech\w*'],
     "Nano":             [r'\bnano\w*'],
 }
