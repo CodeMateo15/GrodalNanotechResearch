@@ -12,28 +12,53 @@
 
 	- Macro, include all keywords
 
-- Business why only in 2005?
-	- ANSWER: Missing data in file, or dates wrong in original XLSX file. Only have publications in 2005
-	- Grab new txt and run it
-
-- Fix 1995-1996 science research issue with splitting articles on *
-	- ANSWER: Still working on it
-
 - Fix 1989, 1983, etc futurists
 	- Grab dates from old excel
 
-- New keyword section MOLECULAR ENGINEERING 
-	- To compare against previous chemistry section
-
-- Grab Newspaper.txt from dropbox and run it
-
-- $, dollar, money, funding, etc. etc.
-	- Maybe take a look at international dollar signs
-
-- Commerce, commercial, etc. etc.
-
-- Application oriented
-	- Products, produced, device, etc. etc. 
-
 - Add a column for dates from old excel vs new scraper python code
 	- % of correctness
+	- FIX: Remove Gov and Futurists %, and check out why others are wrong
+
+- Molecular engineering replace with
+ATP synthase 
+molecular motor* 
+molecular machine* 
+molecular assembl* 
+molecular manufactur*
+conveyor* 
+self-assembl*
+molecular machinery
+biological machine* 
+biological motor*
+molecular chaperones
+conveyor belt*
+robot arm*
+biological nanomachin* 
+nature's assembler*
+robotic assembly
+Molecular robot*
+
+- Revolution column?
+
+- Check out why AI so little
+	- Grab random nanotech and space, and check those
+	- Every 2 months, 6 per year?
+	- Make or flag in big spreadsheet
+
+- Combine all 3 columns - computer, semiconductors, and electronics
+	- Call it Total electronics/computing
+
+- Should html,www be removed for hypertext column?
+
+- internet column add dot.com, dotcom, dot com, dot-com
+
+- Get rid of nanotech from graphs when comparing co-occurance with nanotech
+
+- Space, electronics, biology qualitative data with text from 1 source
+	- EX. Grab article from Futurists with space+nanotech in one month like Jan, populate 
+	  text, then move 3-4 months to grab next with space+nanotech
+	- Make or flag in big spreadsheet, but have a lookup for month/year
+
+- For 3yr MA, if everything before this is 0, mark it as minimum as 1983 is not minimum always
+
+- GET RID OF NANOTECH FROM GRAPH DATA WHEN COMPARING NANOTECH
