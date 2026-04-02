@@ -25,6 +25,7 @@ FILE_SOURCE_MAP = {
     "Science_research.txt":     ("Science Research",   3, "after_label"),
     "Business_press.txt":       ("Business Press",     4, "business_press"),
     "Business.txt":             ("Business",           5, "business_press"),
+    "Old Python Files/Business_2005.rtf": ("Business", 5, "business_press"),
     "futurists.txt":            ("Futurists",          6, "futurist"),
     "Newspapers_1984-2005.txt": ("Newspapers",         7, "newspaper"),
 }
@@ -131,14 +132,23 @@ TOPIC_KEYWORDS = {
     "Computers/Computing": [r'\bcomput', r'\bprocessor', r'\bsoftware\b', r'\bhardware\b', r'\bwireless\b', r'\bdigital\b', r'\bmicroprocessor'],
     "Material Science": [r'\bmaterial science', r'\bcomposite\b', r'\balloy\b', r'\bpolymer\b', r'\bceramics?\b', r'\bcoating'],
     "Cleantech":        [r'\bcleantech\b', r'\brenewable', r'\bsolar\b', r'\bwind energy', r'\bclean energy', r'\bgreen tech', r'\bhydrogen fuel'],
-    "Hypertext":        [r'\bhypertext\b', r'\bhyperlink', r'\bhtml\b', r'\bweb page', r'\bwww\b'],
-    "Internet":         [r'\binternet\b', r'\bonline\b', r'\bworld wide web\b', r'\bbroadband', r'\bnetwork\b'],
+    "Hypertext":        [r'\bhypertext\b', r'\bhyperlink', r'\bweb page'],
+    "Internet":         [r'\binternet\b', r'\bonline\b', r'\bworld wide web\b', r'\bbroadband', r'\bnetwork\b',
+                         r'\bdot\.com\b', r'\bdotcom\b', r'\bdot com\b', r'\bdot-com\b'],
     "Chemistry":        [r'\bchemi', r'\breaction\b', r'\bcatalys', r'\bcompound\b', r'\bsynthes'],
     "Physics":          [r'\bphysics\b', r'\bphysical\b', r'\bquantum\b', r'\bthermodynamic', r'\bmechanics\b', r'\belectromagnet'],
     "Engineering":      [r'\bengineering\b'],
     "Nanotech":         [r'\bnanotech\w*'],
     "Nano":             [r'\bnano\w*'],
-    "Molecular Engineering": [r'\bmolecular engineering\b', r'\bmolecular design\b', r'\bmolecular assembly\b'],
+    "Molecular Manufacturing": [
+        r'\bATP synthase\b', r'\bmolecular motor', r'\bmolecular machine',
+        r'\bmolecular assembl', r'\bmolecular manufactur', r'\bconveyor',
+        r'\bself-assembl', r'\bmolecular machinery\b', r'\bbiological machine',
+        r'\bbiological motor', r'\bmolecular chaperones?\b', r'\bconveyor belt',
+        r'\brobot arm', r'\bbiological nanomachin', r"nature's assembler",
+        r'\brobotic assembly\b', r'\bmolecular robot',
+    ],
+    "Revolution":       [r'\brevolution', r'\brevolutionary\b', r'\bparadigm shift', r'\bbreakthrough', r'\btransformative\b'],
     "Financial":        [r'\$', r'\bdollar', r'\bmoney\b', r'\bfunding\b', r'\binvest', r'€', r'£', r'¥'],
     "Commerce":         [r'\bcommerce', r'\bcommercial', r'\bmarket', r'\btrade'],
     "Application":      [r'\bproduct', r'\bproduced', r'\bdevice', r'\bapplication', r'\bmanufactur'],
@@ -212,7 +222,11 @@ def _compute_date_match(original, scraped):
 
 def make_row(original_date, scraped_date, source_num, source_name, title, body, refs):
     """Build a single output row dict."""
-    display_date = scraped_date or original_date
+    # For Government and Futurists, prefer reference dates (scraper dates unreliable)
+    if source_num in (1, 6):
+        display_date = original_date or scraped_date
+    else:
+        display_date = scraped_date or original_date
     year = display_date.year if display_date else None
     row = {
         'Original Date': original_date.strftime('%d %B %Y') if original_date else None,
@@ -228,6 +242,10 @@ def make_row(original_date, scraped_date, source_num, source_name, title, body, 
     }
     for topic, patterns in TOPIC_KEYWORDS.items():
         row[topic] = count_keyword(body, patterns)
+    # Combined column for electronics/computing/semiconductors
+    row['Total Electronics/Computing'] = (
+        row.get('Computers/Computing', 0) + row.get('Semiconductors', 0) + row.get('Electronics', 0)
+    )
     return row
 
 
@@ -305,6 +323,12 @@ def parse_government(content, source_name, source_num, ref_dates=None):
         title = lines[start]
         body_text = _body_after_title(chunk, title)
         body, refs = strip_references(body_text)
+
+        # Fix: if body is empty but title is very long, the body was pasted into the title
+        if count_words(body) == 0 and count_words(title) > 20:
+            body = title
+            title = title[:80].rsplit(' ', 1)[0] + '...'
+
         rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, refs))
 
     return rows
@@ -438,9 +462,11 @@ def parse_business(content, source_name, source_num, ref_dates=None):
 
 
 def parse_futurist(content, source_name, source_num, ref_dates=None):
-    """Futurists: split by ToC lines and asterisk separators."""
+    """Futurists: split by ToC lines, asterisk separators, and dash separators."""
     combined_sep = re.compile(
-        r'(?:^\s*Foresight Update \d+\s*-\s*Table of Contents.*$|^\s*\*{19,}\s*$)',
+        r'(?:^\s*Foresight Update \d+\s*-\s*Table of Contents.*$'
+        r'|^\s*\*{19,}\s*$'
+        r'|^\s*-{40,}\s*$)',
         re.MULTILINE
     )
     chunks = [c.strip() for c in combined_sep.split(content) if c.strip()]
@@ -470,6 +496,12 @@ def parse_futurist(content, source_name, source_num, ref_dates=None):
         re.IGNORECASE
     )
 
+    # Detect issue header chunks to reset date propagation
+    issue_header_re = re.compile(
+        r'^\s*A publication of the Foresight Institute',
+        re.IGNORECASE
+    )
+
     rows, skipped = [], 0
     last_date = None
     article_idx = 0
@@ -478,6 +510,10 @@ def parse_futurist(content, source_name, source_num, ref_dates=None):
         lines = get_non_blank_lines(chunk)
         if not lines:
             continue
+
+        # Reset last_date at issue boundaries to prevent stale date propagation
+        if issue_header_re.match(lines[0]):
+            last_date = None
 
         # Always try to capture date (even from skipped header chunks)
         chunk_date = extract_date(chunk)
@@ -587,15 +623,42 @@ def parse_newspaper(content, source_name, source_num, ref_dates=None):
 # DISPATCHER
 # ═════════════════════════════════════════════════════════════════════════════
 
+def strip_rtf(text):
+    """Strip RTF markup, returning plain text."""
+    # Remove RTF header up to first empty line or content
+    text = re.sub(r'\{\\fonttbl[^}]*\}', '', text)
+    text = re.sub(r'\{\\colortbl[^}]*\}', '', text)
+    text = re.sub(r'\{\\rtf1[^}]*?\n', '', text)
+    # Remove RTF control words (e.g., \f0, \fs24, \cf0, \pard, etc.)
+    text = re.sub(r'\\[a-z]+\d*\s?', ' ', text)
+    # Remove remaining braces
+    text = text.replace('{', '').replace('}', '')
+    # Convert RTF line breaks (\) to newlines
+    text = text.replace('\\\n', '\n')
+    # Clean up extra whitespace
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'\n[ \t]+', '\n', text)
+    return text.strip()
+
+
 def parse_articles(filepath, source_name, source_num, title_style):
     """Route to the appropriate parser."""
-    script_dir = filepath.parent
+    script_dir = filepath.parent if filepath.suffix != '.rtf' else filepath.parent.parent
 
     with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
         content = f.read()
     content = content.replace('\r\n', '\n').replace('\r', '\n')
 
-    ref_dates = load_reference_dates(script_dir, source_num)
+    # Strip RTF markup if needed
+    if filepath.suffix == '.rtf':
+        content = strip_rtf(content)
+
+    # Skip reference dates for supplementary files (e.g., Business_2005.rtf)
+    # whose articles don't align with the main reference worksheet
+    if filepath.suffix == '.rtf':
+        ref_dates = []
+    else:
+        ref_dates = load_reference_dates(script_dir, source_num)
     if ref_dates:
         print(f"  (loaded {len(ref_dates)} reference dates from {REFERENCE_WORKSHEET})")
 
@@ -622,6 +685,7 @@ def write_excel(all_rows, output_path):
         ['Original Date', 'Scraped Date', 'Date Match %', 'Year', 'Sources', 'Name',
          'Word count', 'Title', 'Body', 'References']
         + list(TOPIC_KEYWORDS.keys())
+        + ['Total Electronics/Computing']
     )
     df = pd.DataFrame(all_rows, columns=columns)
 
@@ -681,6 +745,29 @@ def main():
     if not all_rows:
         print("No articles found. Check that your source files are in the same folder.")
         return
+
+    # ── DEDUPLICATION ───────────────────────────────────────────────────────
+    before_count = len(all_rows)
+    df_temp = pd.DataFrame(all_rows)
+    df_temp = df_temp.drop_duplicates(subset=['Title', 'Body', 'Sources'], keep='first')
+    all_rows = df_temp.to_dict('records')
+    removed = before_count - len(all_rows)
+    if removed:
+        print(f"\nRemoved {removed} exact duplicate rows ({before_count} -> {len(all_rows)})")
+
+    # ── DATE MATCH REPORTING (exclude Government & Futurists) ───────────────
+    print("\n-- Date Match % by Source --")
+    for src_num, src_name in [(2, 'Science News'), (3, 'Science Research'),
+                               (4, 'Business Press'), (5, 'Business'), (7, 'Newspapers')]:
+        src_data = [r['Date Match %'] for r in all_rows
+                    if r['Sources'] == src_num and r['Date Match %'] is not None
+                    and not (isinstance(r['Date Match %'], float) and r['Date Match %'] != r['Date Match %'])]
+        if src_data:
+            avg = sum(src_data) / len(src_data)
+            zeros = sum(1 for v in src_data if v == 0)
+            print(f"  {src_name}: Avg={avg:.1f}% ({len(src_data)} rows)")
+            if zeros:
+                print(f"    WARNING: {zeros} rows with 0% date match")
 
     output_path = script_dir / OUTPUT_FILE
     write_excel(all_rows, output_path)

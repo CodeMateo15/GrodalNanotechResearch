@@ -1,66 +1,17 @@
-- Make graphs
-	- separate based on source and percentage of articles per year
-		- 1 based on just nanotech*
-		- 1 based on if *nano* >= 1
-		- 1 based on if *nano* <= 0
-		- a bunch based on each keyword other than nano
-	- DO FOR ALL SOURCES
-	- Nanotech* >= 1 and co-occurance with all the other keywords
-		- Line graphs too?
-		- 3 Year moving avg to clean up data
-		- Flip it have lines for keywords, graphs for sources
+- Remove Gov and Futurists % of correctness in nanotech_graph.ipynb
 
-	- Macro, include all keywords
+- Add AI random search to another sheet in output.xslx, same as the qualitative one
 
-- Fix 1989, 1983, etc futurists
-	- Grab dates from old excel
+- Switch year column from scraped to original year column
 
-- Add a column for dates from old excel vs new scraper python code
-	- % of correctness
-	- FIX: Remove Gov and Futurists %, and check out why others are wrong
+- Make sure qualitative search, that you oversample the next year if this year does not have 4 articles
 
-- Molecular engineering replace with
-ATP synthase 
-molecular motor* 
-molecular machine* 
-molecular assembl* 
-molecular manufactur*
-conveyor* 
-self-assembl*
-molecular machinery
-biological machine* 
-biological motor*
-molecular chaperones
-conveyor belt*
-robot arm*
-biological nanomachin* 
-nature's assembler*
-robotic assembly
-Molecular robot*
+- Fix Science News, random articles are disappearing
 
-Business rtf 2005 combine with main business txt file
+- Fiz newspaper scrapped dates
 
-- Revolution column?
+- Can you also make graphs over time of how the communities different across the dimensions: 1) Attitude towards nanotechnology; 2) whether an analogy existed or not (all the cells with text needs to be coded as “1” and “none” needs to be coded as“0”; 3) Temporality of the analogy; 4) Whether nanotechnology is “sustaining” or “disrupting” the status quo, 6) whether the analogy is used to argue for more funding
 
-- Check out why AI so little
-	- Grab random nanotech and space, and check those
-	- Every 2 months, 6 per year?
-	- Make or flag in big spreadsheet
+- Later, add Claude ananlysis for qualitative search
 
-- Combine all 3 columns - computer, semiconductors, and electronics
-	- Call it Total electronics/computing
-
-- Should html,www be removed for hypertext column?
-
-- internet column add dot.com, dotcom, dot com, dot-com
-
-- Get rid of nanotech from graphs when comparing co-occurance with nanotech
-
-- Space, electronics, biology qualitative data with text from 1 source
-	- EX. Grab article from Futurists with space+nanotech in one month like Jan, populate 
-	  text, then move 3-4 months to grab next with space+nanotech
-	- Make or flag in big spreadsheet, but have a lookup for month/year
-
-- For 3yr MA, if everything before this is 0, mark it as minimum as 1983 is not minimum always
-
-- GET RID OF NANOTECH FROM GRAPH DATA WHEN COMPARING NANOTECH
+- Too many colors that make it hard to read co-occurance with all keywords based on source
