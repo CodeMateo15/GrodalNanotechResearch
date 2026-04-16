@@ -220,14 +220,18 @@ def _compute_date_match(original, scraped):
     return 0
 
 
-def make_row(original_date, scraped_date, source_num, source_name, title, body, refs):
+def make_row(original_date, scraped_date, source_num, source_name, title, body, refs,
+             original_year=None):
     """Build a single output row dict."""
-    # For Government and Futurists, prefer reference dates (scraper dates unreliable)
-    if source_num in (1, 6):
-        display_date = original_date or scraped_date
+    # Use reference year when available, otherwise derive from dates
+    if original_year is not None:
+        year = original_year
+    elif original_date:
+        year = original_date.year
+    elif scraped_date:
+        year = scraped_date.year
     else:
-        display_date = scraped_date or original_date
-    year = display_date.year if display_date else None
+        year = None
     row = {
         'Original Date': original_date.strftime('%d %B %Y') if original_date else None,
         'Scraped Date':  scraped_date.strftime('%d %B %Y') if scraped_date else None,
@@ -262,37 +266,89 @@ def _body_after_title(chunk, title):
 # FORMAT-SPECIFIC PARSERS
 # ═════════════════════════════════════════════════════════════════════════════
 
-def load_reference_dates(script_dir, source_num):
-    """Load dates from the reference worksheet for a given source number."""
+def _parse_ref_date(val):
+    """Parse a single date value from the reference worksheet."""
+    if pd.isna(val):
+        return None
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, str):
+        fixed = val.replace('0ct', 'Oct').replace('0CT', 'OCT')
+        try:
+            return pd.to_datetime(fixed).to_pydatetime()
+        except Exception:
+            print(f"  WARNING: Could not parse date string: '{val}'")
+            return None
+    return None
+
+
+def load_reference_data(script_dir, source_num):
+    """Load dates and years from the reference worksheet for a given source.
+    Returns (dates_list, years_list) where each is positionally indexed."""
     ref_path = script_dir / REFERENCE_WORKSHEET
     if not ref_path.exists():
-        return []
+        return [], []
     try:
         df = pd.read_excel(ref_path)
         src_df = df[df['Sources'] == source_num].reset_index(drop=True)
-        dates = []
-        for val in src_df['Date']:
+        dates = [_parse_ref_date(val) for val in src_df['Date']]
+        years = []
+        for val in src_df['Year']:
             if pd.isna(val):
-                dates.append(None)
-            elif isinstance(val, datetime):
-                dates.append(val)
-            elif isinstance(val, str):
-                # Try to parse string dates (handles typos like "21-0ct-04")
-                fixed = val.replace('0ct', 'Oct').replace('0CT', 'OCT')
-                try:
-                    dates.append(pd.to_datetime(fixed).to_pydatetime())
-                except Exception:
-                    print(f"  WARNING: Could not parse date string: '{val}'")
-                    dates.append(None)
+                years.append(None)
             else:
-                dates.append(None)
-        return dates
+                years.append(int(val))
+        return dates, years
     except Exception as e:
-        print(f"  WARNING: Could not load reference dates: {e}")
-        return []
+        print(f"  WARNING: Could not load reference data: {e}")
+        return [], []
 
 
-def parse_government(content, source_name, source_num, ref_dates=None):
+def load_reference_dates(script_dir, source_num):
+    """Load dates from the reference worksheet (backward-compatible wrapper)."""
+    dates, _ = load_reference_data(script_dir, source_num)
+    return dates
+
+
+def align_by_date(scraped_dates, ref_dates, ref_years):
+    """Align parsed articles to reference rows using date-group matching.
+
+    Groups both sequences by date, then matches within each group by order.
+    Returns (aligned_dates, aligned_years) lists parallel to scraped_dates.
+    """
+    from collections import defaultdict
+
+    # Build reference groups: date -> [(ref_idx, ref_date, ref_year), ...]
+    ref_groups = defaultdict(list)
+    for i, (rd, ry) in enumerate(zip(ref_dates, ref_years)):
+        if rd is not None:
+            ref_groups[rd.date()].append((i, rd, ry))
+
+    aligned_dates = [None] * len(scraped_dates)
+    aligned_years = [None] * len(scraped_dates)
+
+    # Track how many articles we've consumed from each date group
+    group_cursors = defaultdict(int)
+
+    for out_idx, sd in enumerate(scraped_dates):
+        if sd is None:
+            continue
+        key = sd.date()
+        cursor = group_cursors[key]
+        group = ref_groups.get(key, [])
+        if cursor < len(group):
+            _, ref_date, ref_year = group[cursor]
+            aligned_dates[out_idx] = ref_date
+            aligned_years[out_idx] = ref_year
+            group_cursors[key] = cursor + 1
+        else:
+            # No more ref rows for this date; use scraped date's year
+            aligned_years[out_idx] = sd.year
+
+    return aligned_dates, aligned_years
+
+
+def parse_government(content, source_name, source_num, ref_dates=None, ref_years=None):
     """Government: asterisk separators, strip 'Article N' prefix from title.
     Dates come from the reference worksheet (articles have no inline dates)."""
     chunks = [c.strip() for c in SEP_ASTERISKS.split(content) if c.strip()]
@@ -300,9 +356,10 @@ def parse_government(content, source_name, source_num, ref_dates=None):
 
     for idx, chunk in enumerate(chunks):
         original_date = ref_dates[idx] if ref_dates and idx < len(ref_dates) else None
+        original_year = ref_years[idx] if ref_years and idx < len(ref_years) else None
         scraped_date = extract_date(chunk)
         date = original_date or scraped_date
-        year = date.year if date else None
+        year = original_year or (date.year if date else None)
 
         # Skip year filter when using reference dates (reference is authoritative)
         if not ref_dates and not in_year_range(year):
@@ -329,12 +386,13 @@ def parse_government(content, source_name, source_num, ref_dates=None):
             body = title
             title = title[:80].rsplit(' ', 1)[0] + '...'
 
-        rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, refs))
+        rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, refs,
+                             original_year=original_year))
 
     return rows
 
 
-def parse_after_label(content, source_name, source_num, ref_dates=None):
+def parse_after_label(content, source_name, source_num, ref_dates=None, ref_years=None):
     """Science Research / Science News: section label precedes title."""
     chunks = [c.strip() for c in SEP_ASTERISKS.split(content) if c.strip()]
     rows, skipped = [], 0
@@ -342,6 +400,7 @@ def parse_after_label(content, source_name, source_num, ref_dates=None):
     for idx, chunk in enumerate(chunks):
         scraped_date = extract_date(chunk)
         original_date = ref_dates[idx] if ref_dates and idx < len(ref_dates) else None
+        original_year = ref_years[idx] if ref_years and idx < len(ref_years) else None
         date = scraped_date or original_date
         year = date.year if date else None
         if not in_year_range(year):
@@ -383,10 +442,16 @@ def parse_after_label(content, source_name, source_num, ref_dates=None):
         body_text = "\n".join(body_lines).strip()
         body, refs = strip_references(body_text)
 
+        # Fix: if body is empty but title is very long, the content ended up as the title
+        if count_words(body) < 5 and count_words(title) > 20:
+            body = title
+            title = title[:80].rsplit(' ', 1)[0] + '...'
+
         if count_words(body) < 5:
             continue
 
-        rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, refs))
+        rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, refs,
+                             original_year=original_year))
 
     if skipped:
         print(f"  (skipped {skipped} articles outside {YEAR_MIN}–{YEAR_MAX})")
@@ -408,7 +473,7 @@ def _strip_business_tail(lines):
     return lines
 
 
-def parse_business(content, source_name, source_num, ref_dates=None):
+def parse_business(content, source_name, source_num, ref_dates=None, ref_years=None):
     """Business Press / Business: 'Article N ****' separator, real headline as title."""
     chunks = [c.strip() for c in SEP_BUSINESS.split(content) if c.strip()]
     rows, skipped = [], 0
@@ -416,6 +481,7 @@ def parse_business(content, source_name, source_num, ref_dates=None):
     for idx, chunk in enumerate(chunks):
         scraped_date = extract_date(chunk)
         original_date = ref_dates[idx] if ref_dates and idx < len(ref_dates) else None
+        original_year = ref_years[idx] if ref_years and idx < len(ref_years) else None
         date = scraped_date or original_date
         year = date.year if date else None
         if not in_year_range(year):
@@ -454,14 +520,15 @@ def parse_business(content, source_name, source_num, ref_dates=None):
         if count_words(body) < 5:
             continue
 
-        rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, refs))
+        rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, refs,
+                             original_year=original_year))
 
     if skipped:
         print(f"  (skipped {skipped} articles outside {YEAR_MIN}–{YEAR_MAX})")
     return rows
 
 
-def parse_futurist(content, source_name, source_num, ref_dates=None):
+def parse_futurist(content, source_name, source_num, ref_dates=None, ref_years=None):
     """Futurists: split by ToC lines, asterisk separators, and dash separators."""
     combined_sep = re.compile(
         r'(?:^\s*Foresight Update \d+\s*-\s*Table of Contents.*$'
@@ -549,9 +616,11 @@ def parse_futurist(content, source_name, source_num, ref_dates=None):
             continue
 
         original_date = ref_dates[article_idx] if ref_dates and article_idx < len(ref_dates) else None
+        original_year = ref_years[article_idx] if ref_years and article_idx < len(ref_years) else None
         title = lines[0]
         body = _body_after_title(chunk, title)
-        rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, ""))
+        rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, "",
+                             original_year=original_year))
         article_idx += 1
 
     if skipped:
@@ -559,12 +628,15 @@ def parse_futurist(content, source_name, source_num, ref_dates=None):
     return rows
 
 
-def parse_newspaper(content, source_name, source_num, ref_dates=None):
-    """Newspapers: split by 'Article N ****' and '* * *' sub-item separators."""
+def parse_newspaper(content, source_name, source_num, ref_dates=None, ref_years=None):
+    """Newspapers: split by 'Article N ****' and '* * *' sub-item separators.
+    Uses date-group alignment instead of positional index for reference matching."""
     chunks = [c.strip() for c in SEP_NEWSPAPER.split(content) if c.strip()]
-    rows, skipped = [], 0
+    skipped = 0
     last_date = None
 
+    # First pass: parse all chunks into preliminary article data
+    parsed = []
     for idx, chunk in enumerate(chunks):
         scraped_date = extract_date(chunk)
         if scraped_date:
@@ -572,8 +644,7 @@ def parse_newspaper(content, source_name, source_num, ref_dates=None):
         else:
             scraped_date = last_date
 
-        original_date = ref_dates[idx] if ref_dates and idx < len(ref_dates) else None
-        date = scraped_date or original_date
+        date = scraped_date
         year = date.year if date else None
         if not in_year_range(year):
             skipped += 1
@@ -600,7 +671,6 @@ def parse_newspaper(content, source_name, source_num, ref_dates=None):
                 break
 
         if body_start == 0:
-            # No copyright line (sub-item chunk) — body is everything after title
             body_text = _body_after_title(chunk, title)
         else:
             body_lines = list(raw_lines[body_start:])
@@ -612,7 +682,29 @@ def parse_newspaper(content, source_name, source_num, ref_dates=None):
         if count_words(body) < 5:
             continue
 
-        rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, refs))
+        parsed.append({
+            'scraped_date': scraped_date,
+            'title': title,
+            'body': body,
+            'refs': refs,
+        })
+
+    # Second pass: align with reference data by date groups
+    scraped_dates = [p['scraped_date'] for p in parsed]
+    if ref_dates and ref_years:
+        aligned_dates, aligned_years = align_by_date(scraped_dates, ref_dates, ref_years)
+    else:
+        aligned_dates = [None] * len(parsed)
+        aligned_years = [None] * len(parsed)
+
+    # Build final rows with aligned reference data
+    rows = []
+    for i, p in enumerate(parsed):
+        rows.append(make_row(
+            aligned_dates[i], p['scraped_date'], source_num, source_name,
+            p['title'], p['body'], p['refs'],
+            original_year=aligned_years[i],
+        ))
 
     if skipped:
         print(f"  (skipped {skipped} articles outside {YEAR_MIN}–{YEAR_MAX})")
@@ -656,22 +748,22 @@ def parse_articles(filepath, source_name, source_num, title_style):
     # Skip reference dates for supplementary files (e.g., Business_2005.rtf)
     # whose articles don't align with the main reference worksheet
     if filepath.suffix == '.rtf':
-        ref_dates = []
+        ref_dates, ref_years = [], []
     else:
-        ref_dates = load_reference_dates(script_dir, source_num)
+        ref_dates, ref_years = load_reference_data(script_dir, source_num)
     if ref_dates:
-        print(f"  (loaded {len(ref_dates)} reference dates from {REFERENCE_WORKSHEET})")
+        print(f"  (loaded {len(ref_dates)} reference entries from {REFERENCE_WORKSHEET})")
 
     if title_style == "government":
-        return parse_government(content, source_name, source_num, ref_dates)
+        return parse_government(content, source_name, source_num, ref_dates, ref_years)
     elif title_style == "after_label":
-        return parse_after_label(content, source_name, source_num, ref_dates)
+        return parse_after_label(content, source_name, source_num, ref_dates, ref_years)
     elif title_style == "business_press":
-        return parse_business(content, source_name, source_num, ref_dates)
+        return parse_business(content, source_name, source_num, ref_dates, ref_years)
     elif title_style == "futurist":
-        return parse_futurist(content, source_name, source_num, ref_dates)
+        return parse_futurist(content, source_name, source_num, ref_dates, ref_years)
     elif title_style == "newspaper":
-        return parse_newspaper(content, source_name, source_num, ref_dates)
+        return parse_newspaper(content, source_name, source_num, ref_dates, ref_years)
     else:
         raise ValueError(f"Unknown title_style: {title_style}")
 

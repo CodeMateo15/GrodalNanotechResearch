@@ -12,6 +12,6 @@
 
 - Can you also make graphs over time of how the communities different across the dimensions: 1) Attitude towards nanotechnology; 2) whether an analogy existed or not (all the cells with text needs to be coded as “1” and “none” needs to be coded as“0”; 3) Temporality of the analogy; 4) Whether nanotechnology is “sustaining” or “disrupting” the status quo, 6) whether the analogy is used to argue for more funding
 
-- Later, add Claude ananlysis for qualitative search
+- Later, add Claude analysis for qualitative search
 
 - Too many colors that make it hard to read co-occurance with all keywords based on source
