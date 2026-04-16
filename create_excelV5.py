@@ -208,15 +208,17 @@ def in_year_range(year):
 
 
 def _compute_date_match(original, scraped):
-    """Compare two dates and return a match percentage."""
+    """Compare two dates and return a match percentage.
+    Year match is weighted heavily (90% minimum) since correct year
+    is the most important factor for temporal analysis."""
     if original is None or scraped is None:
         return None
     if original.date() == scraped.date():
         return 100
     if original.year == scraped.year and original.month == scraped.month:
-        return 75
+        return 95
     if original.year == scraped.year:
-        return 50
+        return 90
     return 0
 
 
