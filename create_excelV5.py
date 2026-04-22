@@ -43,8 +43,19 @@ REFERENCE_WORKSHEET = "Combined community worksheet.xlsx"
 SEP_ASTERISKS = re.compile(r'^\s*\*{19,}\s*$', re.MULTILINE)
 SEP_BUSINESS  = re.compile(r'^\s*Article\s+\d+\s+\*{19,}', re.MULTILINE)
 SEP_NEWSPAPER = re.compile(
-    r'(?:^\s*Article\s+\d+\s+\*{19,}|^\s*\*\s+\*\s+\*\s*$)',
-    re.MULTILINE
+    # Factiva-style boundaries. Observed variants in Newspapers_1984-2005.txt:
+    #   "Article N ***..."                        3361 lines
+    #   "Article N Previous Article|***..."         87 lines (pipe separator)
+    #   "Article N Previous Article ***..."          8 lines (space separator)
+    #   "Article N Next Article"                     5 lines (no asterisks)
+    #   "Article N" bare                             2 lines
+    r'(?:'
+    r'^\s*Article\s+\d+'
+    r'(?:(?:\s+(?:Previous|Next)\s+Article)?\s*\|?\s*\*{10,})?'
+    r'\s*$'
+    r'|^\s*\*\s+\*\s+\*\s*$'
+    r')',
+    re.MULTILINE | re.IGNORECASE,
 )
 
 # ── SECTION LABELS (Science-style) ──────────────────────────────────────────
@@ -222,6 +233,23 @@ def _compute_date_match(original, scraped):
     return 0
 
 
+def _compute_days_between(original, scraped):
+    """Absolute day gap between the two dates, or None if either is missing."""
+    if original is None or scraped is None:
+        return None
+    return abs((original.date() - scraped.date()).days)
+
+
+def _compute_date_match_tolerant(original, scraped):
+    """Linear decay to 90 days: tolerates publication-vs-written gaps
+    that straddle a year boundary (e.g. Dec 15 1994 vs Jan 5 1995 = 67%).
+    Returns None if either date is missing."""
+    days = _compute_days_between(original, scraped)
+    if days is None:
+        return None
+    return max(0, round(100 * (1 - days / 90)))
+
+
 def make_row(original_date, scraped_date, source_num, source_name, title, body, refs,
              original_year=None):
     """Build a single output row dict."""
@@ -238,6 +266,8 @@ def make_row(original_date, scraped_date, source_num, source_name, title, body, 
         'Original Date': original_date.strftime('%d %B %Y') if original_date else None,
         'Scraped Date':  scraped_date.strftime('%d %B %Y') if scraped_date else None,
         'Date Match %':  _compute_date_match(original_date, scraped_date),
+        'Days Between':  _compute_days_between(original_date, scraped_date),
+        'Date Match % (tolerant)': _compute_date_match_tolerant(original_date, scraped_date),
         'Year':          year,
         'Sources':       source_num,
         'Name':          source_name,
@@ -312,6 +342,20 @@ def load_reference_dates(script_dir, source_num):
     return dates
 
 
+def count_reference_by_source(script_dir):
+    """Return {source_num: row_count} from the reference worksheet.
+    Used by the Coverage Report sheet to compare against output.xlsx."""
+    ref_path = script_dir / REFERENCE_WORKSHEET
+    if not ref_path.exists():
+        return {}
+    try:
+        df = pd.read_excel(ref_path)
+        return {int(k): int(v) for k, v in df.groupby('Sources').size().items()}
+    except Exception as e:
+        print(f"  WARNING: Could not count reference data: {e}")
+        return {}
+
+
 def align_by_date(scraped_dates, ref_dates, ref_years):
     """Align parsed articles to reference rows using date-group matching.
 
@@ -350,10 +394,12 @@ def align_by_date(scraped_dates, ref_dates, ref_years):
     return aligned_dates, aligned_years
 
 
-def parse_government(content, source_name, source_num, ref_dates=None, ref_years=None):
+def parse_government(content, source_name, source_num, ref_dates=None, ref_years=None, stats=None):
     """Government: asterisk separators, strip 'Article N' prefix from title.
     Dates come from the reference worksheet (articles have no inline dates)."""
     chunks = [c.strip() for c in SEP_ASTERISKS.split(content) if c.strip()]
+    if stats is not None:
+        stats['raw_chunks'] = stats.get('raw_chunks', 0) + len(chunks)
     rows = []
 
     for idx, chunk in enumerate(chunks):
@@ -365,10 +411,14 @@ def parse_government(content, source_name, source_num, ref_dates=None, ref_years
 
         # Skip year filter when using reference dates (reference is authoritative)
         if not ref_dates and not in_year_range(year):
+            if stats is not None:
+                stats['dropped_year'] = stats.get('dropped_year', 0) + 1
             continue
 
         lines = get_non_blank_lines(chunk)
         if not lines:
+            if stats is not None:
+                stats['dropped_empty_chunk'] = stats.get('dropped_empty_chunk', 0) + 1
             continue
 
         # Skip "Article N" prefix line
@@ -377,6 +427,8 @@ def parse_government(content, source_name, source_num, ref_dates=None, ref_years
             start = 1
 
         if start >= len(lines):
+            if stats is not None:
+                stats['dropped_empty_title'] = stats.get('dropped_empty_title', 0) + 1
             continue
 
         title = lines[start]
@@ -391,12 +443,16 @@ def parse_government(content, source_name, source_num, ref_dates=None, ref_years
         rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, refs,
                              original_year=original_year))
 
+    if stats is not None:
+        stats['output_rows'] = stats.get('output_rows', 0) + len(rows)
     return rows
 
 
-def parse_after_label(content, source_name, source_num, ref_dates=None, ref_years=None):
+def parse_after_label(content, source_name, source_num, ref_dates=None, ref_years=None, stats=None):
     """Science Research / Science News: section label precedes title."""
     chunks = [c.strip() for c in SEP_ASTERISKS.split(content) if c.strip()]
+    if stats is not None:
+        stats['raw_chunks'] = stats.get('raw_chunks', 0) + len(chunks)
     rows, skipped = [], 0
 
     for idx, chunk in enumerate(chunks):
@@ -407,10 +463,14 @@ def parse_after_label(content, source_name, source_num, ref_dates=None, ref_year
         year = date.year if date else None
         if not in_year_range(year):
             skipped += 1
+            if stats is not None:
+                stats['dropped_year'] = stats.get('dropped_year', 0) + 1
             continue
 
         lines = get_non_blank_lines(chunk)
         if not lines:
+            if stats is not None:
+                stats['dropped_empty_chunk'] = stats.get('dropped_empty_chunk', 0) + 1
             continue
 
         # Find title: line after a section label
@@ -432,6 +492,8 @@ def parse_after_label(content, source_name, source_num, ref_dates=None, ref_year
                     break
 
         if not title:
+            if stats is not None:
+                stats['dropped_empty_title'] = stats.get('dropped_empty_title', 0) + 1
             continue
 
         # Body after title, strip leading science metadata
@@ -450,6 +512,8 @@ def parse_after_label(content, source_name, source_num, ref_dates=None, ref_year
             title = title[:80].rsplit(' ', 1)[0] + '...'
 
         if count_words(body) < 5:
+            if stats is not None:
+                stats['dropped_wordcount'] = stats.get('dropped_wordcount', 0) + 1
             continue
 
         rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, refs,
@@ -457,6 +521,8 @@ def parse_after_label(content, source_name, source_num, ref_dates=None, ref_year
 
     if skipped:
         print(f"  (skipped {skipped} articles outside {YEAR_MIN}–{YEAR_MAX})")
+    if stats is not None:
+        stats['output_rows'] = stats.get('output_rows', 0) + len(rows)
     return rows
 
 
@@ -475,9 +541,11 @@ def _strip_business_tail(lines):
     return lines
 
 
-def parse_business(content, source_name, source_num, ref_dates=None, ref_years=None):
+def parse_business(content, source_name, source_num, ref_dates=None, ref_years=None, stats=None):
     """Business Press / Business: 'Article N ****' separator, real headline as title."""
     chunks = [c.strip() for c in SEP_BUSINESS.split(content) if c.strip()]
+    if stats is not None:
+        stats['raw_chunks'] = stats.get('raw_chunks', 0) + len(chunks)
     rows, skipped = [], 0
 
     for idx, chunk in enumerate(chunks):
@@ -488,16 +556,22 @@ def parse_business(content, source_name, source_num, ref_dates=None, ref_years=N
         year = date.year if date else None
         if not in_year_range(year):
             skipped += 1
+            if stats is not None:
+                stats['dropped_year'] = stats.get('dropped_year', 0) + 1
             continue
 
         lines = get_non_blank_lines(chunk)
         if not lines:
+            if stats is not None:
+                stats['dropped_empty_chunk'] = stats.get('dropped_empty_chunk', 0) + 1
             continue
 
         # Skip known header junk at start of chunk
         while lines and BUSINESS_HEADER_JUNK.match(lines[0]):
             lines.pop(0)
         if not lines:
+            if stats is not None:
+                stats['dropped_empty_title'] = stats.get('dropped_empty_title', 0) + 1
             continue
 
         title = lines[0]  # actual headline
@@ -520,6 +594,8 @@ def parse_business(content, source_name, source_num, ref_dates=None, ref_years=N
         body, refs = strip_references(body_text)
 
         if count_words(body) < 5:
+            if stats is not None:
+                stats['dropped_wordcount'] = stats.get('dropped_wordcount', 0) + 1
             continue
 
         rows.append(make_row(original_date, scraped_date, source_num, source_name, title, body, refs,
@@ -527,10 +603,12 @@ def parse_business(content, source_name, source_num, ref_dates=None, ref_years=N
 
     if skipped:
         print(f"  (skipped {skipped} articles outside {YEAR_MIN}–{YEAR_MAX})")
+    if stats is not None:
+        stats['output_rows'] = stats.get('output_rows', 0) + len(rows)
     return rows
 
 
-def parse_futurist(content, source_name, source_num, ref_dates=None, ref_years=None):
+def parse_futurist(content, source_name, source_num, ref_dates=None, ref_years=None, stats=None):
     """Futurists: split by ToC lines, asterisk separators, and dash separators."""
     combined_sep = re.compile(
         r'(?:^\s*Foresight Update \d+\s*-\s*Table of Contents.*$'
@@ -539,6 +617,8 @@ def parse_futurist(content, source_name, source_num, ref_dates=None, ref_years=N
         re.MULTILINE
     )
     chunks = [c.strip() for c in combined_sep.split(content) if c.strip()]
+    if stats is not None:
+        stats['raw_chunks'] = stats.get('raw_chunks', 0) + len(chunks)
 
     # Lines that appear in issue headers (not article content)
     header_line_re = re.compile(
@@ -591,8 +671,12 @@ def parse_futurist(content, source_name, source_num, ref_dates=None, ref_years=N
 
         # Skip known boilerplate chunks
         if any(skip_chunk_re.match(l) for l in lines[:2]):
+            if stats is not None:
+                stats['dropped_boilerplate'] = stats.get('dropped_boilerplate', 0) + 1
             continue
         if count_words(chunk) < 20:
+            if stats is not None:
+                stats['dropped_boilerplate'] = stats.get('dropped_boilerplate', 0) + 1
             continue
 
         # Strip issue-header boilerplate from chunk start (only when
@@ -609,12 +693,16 @@ def parse_futurist(content, source_name, source_num, ref_dates=None, ref_years=N
                     break
 
         if not lines or count_words(' '.join(lines)) < 15:
+            if stats is not None:
+                stats['dropped_boilerplate'] = stats.get('dropped_boilerplate', 0) + 1
             continue
 
         scraped_date = chunk_date if chunk_date else last_date
         year = scraped_date.year if scraped_date else None
         if not in_year_range(year):
             skipped += 1
+            if stats is not None:
+                stats['dropped_year'] = stats.get('dropped_year', 0) + 1
             continue
 
         original_date = ref_dates[article_idx] if ref_dates and article_idx < len(ref_dates) else None
@@ -627,13 +715,17 @@ def parse_futurist(content, source_name, source_num, ref_dates=None, ref_years=N
 
     if skipped:
         print(f"  (skipped {skipped} articles outside {YEAR_MIN}–{YEAR_MAX})")
+    if stats is not None:
+        stats['output_rows'] = stats.get('output_rows', 0) + len(rows)
     return rows
 
 
-def parse_newspaper(content, source_name, source_num, ref_dates=None, ref_years=None):
+def parse_newspaper(content, source_name, source_num, ref_dates=None, ref_years=None, stats=None):
     """Newspapers: split by 'Article N ****' and '* * *' sub-item separators.
     Uses date-group alignment instead of positional index for reference matching."""
     chunks = [c.strip() for c in SEP_NEWSPAPER.split(content) if c.strip()]
+    if stats is not None:
+        stats['raw_chunks'] = stats.get('raw_chunks', 0) + len(chunks)
     skipped = 0
     last_date = None
 
@@ -650,16 +742,22 @@ def parse_newspaper(content, source_name, source_num, ref_dates=None, ref_years=
         year = date.year if date else None
         if not in_year_range(year):
             skipped += 1
+            if stats is not None:
+                stats['dropped_year'] = stats.get('dropped_year', 0) + 1
             continue
 
         lines = get_non_blank_lines(chunk)
         if not lines:
+            if stats is not None:
+                stats['dropped_empty_chunk'] = stats.get('dropped_empty_chunk', 0) + 1
             continue
 
         # Skip known header junk
         while lines and BUSINESS_HEADER_JUNK.match(lines[0]):
             lines.pop(0)
         if not lines:
+            if stats is not None:
+                stats['dropped_empty_title'] = stats.get('dropped_empty_title', 0) + 1
             continue
 
         title = lines[0]
@@ -682,6 +780,8 @@ def parse_newspaper(content, source_name, source_num, ref_dates=None, ref_years=
         body, refs = strip_references(body_text)
 
         if count_words(body) < 5:
+            if stats is not None:
+                stats['dropped_wordcount'] = stats.get('dropped_wordcount', 0) + 1
             continue
 
         parsed.append({
@@ -710,6 +810,8 @@ def parse_newspaper(content, source_name, source_num, ref_dates=None, ref_years=
 
     if skipped:
         print(f"  (skipped {skipped} articles outside {YEAR_MIN}–{YEAR_MAX})")
+    if stats is not None:
+        stats['output_rows'] = stats.get('output_rows', 0) + len(rows)
     return rows
 
 
@@ -735,8 +837,9 @@ def strip_rtf(text):
     return text.strip()
 
 
-def parse_articles(filepath, source_name, source_num, title_style):
-    """Route to the appropriate parser."""
+def parse_articles(filepath, source_name, source_num, title_style, stats=None):
+    """Route to the appropriate parser. If stats is passed, parser counters
+    (raw_chunks, dropped_*, output_rows) are accumulated in place."""
     script_dir = filepath.parent if filepath.suffix != '.rtf' else filepath.parent.parent
 
     with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
@@ -757,15 +860,15 @@ def parse_articles(filepath, source_name, source_num, title_style):
         print(f"  (loaded {len(ref_dates)} reference entries from {REFERENCE_WORKSHEET})")
 
     if title_style == "government":
-        return parse_government(content, source_name, source_num, ref_dates, ref_years)
+        return parse_government(content, source_name, source_num, ref_dates, ref_years, stats=stats)
     elif title_style == "after_label":
-        return parse_after_label(content, source_name, source_num, ref_dates, ref_years)
+        return parse_after_label(content, source_name, source_num, ref_dates, ref_years, stats=stats)
     elif title_style == "business_press":
-        return parse_business(content, source_name, source_num, ref_dates, ref_years)
+        return parse_business(content, source_name, source_num, ref_dates, ref_years, stats=stats)
     elif title_style == "futurist":
-        return parse_futurist(content, source_name, source_num, ref_dates, ref_years)
+        return parse_futurist(content, source_name, source_num, ref_dates, ref_years, stats=stats)
     elif title_style == "newspaper":
-        return parse_newspaper(content, source_name, source_num, ref_dates, ref_years)
+        return parse_newspaper(content, source_name, source_num, ref_dates, ref_years, stats=stats)
     else:
         raise ValueError(f"Unknown title_style: {title_style}")
 
@@ -776,7 +879,9 @@ def parse_articles(filepath, source_name, source_num, title_style):
 
 def write_excel(all_rows, output_path):
     columns = (
-        ['Original Date', 'Scraped Date', 'Date Match %', 'Year', 'Sources', 'Name',
+        ['Original Date', 'Scraped Date', 'Date Match %',
+         'Days Between', 'Date Match % (tolerant)',
+         'Year', 'Sources', 'Name',
          'Word count', 'Title', 'Body', 'References']
         + list(TOPIC_KEYWORDS.keys())
         + ['Total Electronics/Computing']
@@ -796,6 +901,7 @@ def write_excel(all_rows, output_path):
 
         name_widths = {
             'Original Date': 14, 'Scraped Date': 14, 'Date Match %': 12,
+            'Days Between': 10, 'Date Match % (tolerant)': 18,
             'Year': 6, 'Sources': 8, 'Name': 18, 'Word count': 12,
             'Title': 40, 'Body': 60, 'References': 60,
         }
@@ -812,13 +918,144 @@ def write_excel(all_rows, output_path):
                 cell.alignment = Alignment(wrap_text=False, vertical='top')
 
 
+def write_qualitative_sheets(output_path):
+    """Append 'Qualitative Samples' + 'AI Qualitative Samples' sheets.
+
+    Uses the sampling/ package so the pipeline and the notebook share one
+    implementation (the previous flow required the user to run the bottom
+    notebook cells manually — this runs automatically).
+    """
+    from sampling.qualitative import build_qualitative_samples
+    from sampling.ai_qualitative import build_ai_qualitative_samples
+
+    df_all = pd.read_excel(output_path, sheet_name='Sheet1')
+    qual_df = build_qualitative_samples(df_all, year_min=YEAR_MIN, year_max=YEAR_MAX)
+    ai_df = build_ai_qualitative_samples(df_all, source_filter=6,
+                                          year_min=YEAR_MIN, year_max=YEAR_MAX)
+
+    with pd.ExcelWriter(output_path, engine='openpyxl',
+                        mode='a', if_sheet_exists='replace') as writer:
+        qual_df.to_excel(writer, sheet_name='Qualitative Samples', index=False)
+        ai_df.to_excel(writer, sheet_name='AI Qualitative Samples', index=False)
+
+    print(f"Wrote {len(qual_df)} qualitative + {len(ai_df)} AI-qualitative samples.")
+
+
+# Source-num → human label, matches FILE_SOURCE_MAP. Kept as a module-level
+# lookup so the Coverage Report can label rows nicely.
+SOURCE_LABELS = {
+    1: 'Government',
+    2: 'Science News',
+    3: 'Science Research',
+    4: 'Business Press',
+    5: 'Business',
+    6: 'Futurists',
+    7: 'Newspapers',
+}
+
+# Sources where reference-count alignment is approximate (Futurists uses an
+# ad-hoc sequential counter, so its per-source stats can't be compared 1-to-1
+# against the reference worksheet). Flagged in the Coverage Report.
+APPROXIMATE_SOURCES = {6}
+
+
+def write_coverage_sheet(coverage_stats, ref_counts, output_path):
+    """Append a 'Coverage Report' sheet explaining the per-source article-count
+    delta between the reference worksheet and output.xlsx.
+
+    `coverage_stats` is a dict keyed by source_num with the counters each
+    parser accumulates (raw_chunks, dropped_year, dropped_wordcount, etc.)
+    plus post-hoc fields (dropped_dedup, final_count) added by main().
+    """
+    rows = []
+    for src_num in sorted(set(list(coverage_stats.keys()) + list(ref_counts.keys()))):
+        s = coverage_stats.get(src_num, {})
+        label = SOURCE_LABELS.get(src_num, f'Source {src_num}')
+        if src_num in APPROXIMATE_SOURCES:
+            label += ' (approx)'
+        ref = ref_counts.get(src_num, 0)
+        final = s.get('final_count', 0)
+        rows.append({
+            'Source': label,
+            'Sources#': src_num,
+            'Reference Count': ref,
+            'Raw Chunks': s.get('raw_chunks', 0),
+            'Dropped (Year)': s.get('dropped_year', 0),
+            'Dropped (Word Count)': s.get('dropped_wordcount', 0),
+            'Dropped (Empty Title)': s.get('dropped_empty_title', 0),
+            'Dropped (Empty Chunk)': s.get('dropped_empty_chunk', 0),
+            'Dropped (Boilerplate)': s.get('dropped_boilerplate', 0),
+            'Dropped (Dedup)': s.get('dropped_dedup', 0),
+            'Final Count': final,
+            'Delta': final - ref,
+            'Coverage %': round(100 * final / ref, 1) if ref else None,
+        })
+
+    # Totals row
+    total_ref = sum(r['Reference Count'] for r in rows)
+    total_final = sum(r['Final Count'] for r in rows)
+    rows.append({
+        'Source': 'TOTAL',
+        'Sources#': '',
+        'Reference Count': total_ref,
+        'Raw Chunks': sum(r['Raw Chunks'] for r in rows),
+        'Dropped (Year)': sum(r['Dropped (Year)'] for r in rows),
+        'Dropped (Word Count)': sum(r['Dropped (Word Count)'] for r in rows),
+        'Dropped (Empty Title)': sum(r['Dropped (Empty Title)'] for r in rows),
+        'Dropped (Empty Chunk)': sum(r['Dropped (Empty Chunk)'] for r in rows),
+        'Dropped (Boilerplate)': sum(r['Dropped (Boilerplate)'] for r in rows),
+        'Dropped (Dedup)': sum(r['Dropped (Dedup)'] for r in rows),
+        'Final Count': total_final,
+        'Delta': total_final - total_ref,
+        'Coverage %': round(100 * total_final / total_ref, 1) if total_ref else None,
+    })
+
+    df = pd.DataFrame(rows)
+    with pd.ExcelWriter(output_path, engine='openpyxl',
+                        mode='a', if_sheet_exists='replace') as writer:
+        df.to_excel(writer, sheet_name='Coverage Report', index=False)
+        ws = writer.sheets['Coverage Report']
+        header_fill = PatternFill('solid', start_color='4472C4', end_color='4472C4')
+        header_font = Font(name='Arial', bold=True, color='FFFFFF', size=11)
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+        # Bold the TOTAL row (last row)
+        total_row_idx = ws.max_row
+        total_font = Font(name='Arial', bold=True, size=11)
+        for cell in ws[total_row_idx]:
+            cell.font = total_font
+        # Widen columns
+        widths = {'A': 22, 'B': 10, 'C': 16, 'D': 12}
+        for col, w in widths.items():
+            ws.column_dimensions[col].width = w
+        for col_letter in 'EFGHIJKLMN':
+            ws.column_dimensions[col_letter].width = 16
+
+    print(f"Wrote Coverage Report ({total_final}/{total_ref} articles, "
+          f"{100*total_final/total_ref:.1f}% coverage)" if total_ref else "")
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═════════════════════════════════════════════════════════════════════════════
 
 def main():
+    from collections import defaultdict
+
     script_dir = Path(__file__).parent
     all_rows = []
+    # Per-source stats accumulated by the parsers; used for the Coverage Report.
+    coverage_stats = defaultdict(lambda: {
+        'raw_chunks': 0,
+        'dropped_year': 0,
+        'dropped_wordcount': 0,
+        'dropped_empty_title': 0,
+        'dropped_empty_chunk': 0,
+        'dropped_boilerplate': 0,
+        'output_rows': 0,
+    })
 
     for filename, (source_name, source_num, title_style) in FILE_SOURCE_MAP.items():
         filepath = script_dir / filename
@@ -826,7 +1063,8 @@ def main():
             print(f"WARNING: '{filename}' not found in {script_dir} — skipping.")
             continue
 
-        rows = parse_articles(filepath, source_name, source_num, title_style)
+        rows = parse_articles(filepath, source_name, source_num, title_style,
+                              stats=coverage_stats[source_num])
         all_rows.extend(rows)
         print(f"'{filename}' ({source_name}, Sources={source_num}): {len(rows)} articles")
         # Print a few samples for spot-checking
@@ -843,29 +1081,65 @@ def main():
     # ── DEDUPLICATION ───────────────────────────────────────────────────────
     before_count = len(all_rows)
     df_temp = pd.DataFrame(all_rows)
+    # Compute per-source dup counts *before* dropping so the Coverage Report
+    # can attribute dedup loss to the right source.
+    dup_mask = df_temp.duplicated(subset=['Title', 'Body', 'Sources'], keep='first')
+    for src_num, n in df_temp.loc[dup_mask].groupby('Sources').size().items():
+        coverage_stats[int(src_num)]['dropped_dedup'] = int(n)
     df_temp = df_temp.drop_duplicates(subset=['Title', 'Body', 'Sources'], keep='first')
     all_rows = df_temp.to_dict('records')
     removed = before_count - len(all_rows)
     if removed:
         print(f"\nRemoved {removed} exact duplicate rows ({before_count} -> {len(all_rows)})")
 
+    # Record final post-dedup counts per source for the Coverage Report.
+    for src_num, n in df_temp.groupby('Sources').size().items():
+        coverage_stats[int(src_num)]['final_count'] = int(n)
+
     # ── DATE MATCH REPORTING (exclude Government & Futurists) ───────────────
-    print("\n-- Date Match % by Source --")
+    def _valid(v):
+        if v is None:
+            return False
+        if isinstance(v, float) and v != v:  # NaN
+            return False
+        return True
+
+    print("\n-- Date Match by Source (strict vs tolerant) --")
     for src_num, src_name in [(2, 'Science News'), (3, 'Science Research'),
                                (4, 'Business Press'), (5, 'Business'), (7, 'Newspapers')]:
-        src_data = [r['Date Match %'] for r in all_rows
-                    if r['Sources'] == src_num and r['Date Match %'] is not None
-                    and not (isinstance(r['Date Match %'], float) and r['Date Match %'] != r['Date Match %'])]
-        if src_data:
-            avg = sum(src_data) / len(src_data)
-            zeros = sum(1 for v in src_data if v == 0)
-            print(f"  {src_name}: Avg={avg:.1f}% ({len(src_data)} rows)")
-            if zeros:
-                print(f"    WARNING: {zeros} rows with 0% date match")
+        strict = [r['Date Match %'] for r in all_rows
+                  if r['Sources'] == src_num and _valid(r['Date Match %'])]
+        tolerant = [r['Date Match % (tolerant)'] for r in all_rows
+                    if r['Sources'] == src_num and _valid(r['Date Match % (tolerant)'])]
+        days = [r['Days Between'] for r in all_rows
+                if r['Sources'] == src_num and _valid(r['Days Between'])]
+        if strict:
+            s_avg = sum(strict) / len(strict)
+            t_avg = sum(tolerant) / len(tolerant) if tolerant else float('nan')
+            d_median = sorted(days)[len(days) // 2] if days else None
+            s_zeros = sum(1 for v in strict if v == 0)
+            t_zeros = sum(1 for v in tolerant if v == 0)
+            print(f"  {src_name}: strict={s_avg:.1f}%  tolerant={t_avg:.1f}%  "
+                  f"median_days={d_median}  n={len(strict)}")
+            if s_zeros != t_zeros:
+                print(f"    (tolerant reduces 0%-rows from {s_zeros} -> {t_zeros})")
 
     output_path = script_dir / OUTPUT_FILE
     write_excel(all_rows, output_path)
     print(f"\nDone! {len(all_rows)} total rows written to '{output_path}'")
+
+    # ── AUTO-POPULATE qualitative & AI-qualitative sample sheets ────────────
+    try:
+        write_qualitative_sheets(output_path)
+    except Exception as e:
+        print(f"  WARNING: could not write qualitative sample sheets: {e}")
+
+    # ── COVERAGE REPORT ────────────────────────────────────────────────────
+    try:
+        ref_counts = count_reference_by_source(script_dir)
+        write_coverage_sheet(dict(coverage_stats), ref_counts, output_path)
+    except Exception as e:
+        print(f"  WARNING: could not write Coverage Report: {e}")
 
 
 if __name__ == '__main__':
