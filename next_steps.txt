@@ -1,13 +1,7 @@
-- Add another column for days in between the two dates that are listed per article. then have another % of accuracy based on how many days it is off. I think some dates are showing as wrong but it is because one is 1995 while the original is 1994, BUT the 1995 is Jan 5 1995 while original is Dec 15 1994. This is due to different publication and written dates. Idk maybe another system is better, just think about it
+- Remove 2026 filter
 
-- IGNORE, ask again what this is about?: Can you also make graphs over time of how the communities different across the dimensions: 1) Attitude towards nanotechnology; 2) whether an analogy existed or not (all the cells with text needs to be coded as “1” and “none” needs to be coded as“0”; 3) Temporality of the analogy; 4) Whether nanotechnology is “sustaining” or “disrupting” the status quo, 6) whether the analogy is used to argue for more funding
+- Make sure stars match reference article count
 
-- Add a section to call on Claude to do qualitative research on the provided texts
+- Use Claude to analyze: Can you also make graphs over time of how the communities different across the dimensions: 1) Attitude towards nanotechnology; 2) whether an analogy existed or not (all the cells with text needs to be coded as “1” and “none” needs to be coded as“0”; 3) Temporality of the analogy; 4) Whether nanotechnology is “sustaining” or “disrupting” the status quo, 6) whether the analogy is used to argue for more funding
 
-- Why is the amount of articles not the same for original combined community worksheet.xlsx and new output.xlsx
-
-- pdf that gets created with all the visualizations from nanotech_graphs.ipynb. 
-
-- Also the extra cells at the bottom of nanotech_graphs should be called when the output.xlsx is being made so the extra tabs are created too.
-
-- What other fixes are needed?
+- Match altered vs unaltered Claude excel file and output.xlsx, and import columns with Claude analysis
