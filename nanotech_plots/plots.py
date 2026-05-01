@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from .config import SOURCE_INFO, KEYWORD_COLS, COOCCURRENCE_COLS, COLORS
 from .data import (
     ALL_YEARS, get_source_df, pct_per_year, pct_per_year_from_col,
+    pct_per_year_categorical, pct_per_year_binary,
     moving_avg, smart_yticks, make_bar,
 )
 
@@ -227,3 +228,164 @@ def make_any_keyword_macro_fig(df_all, sources):
     ax.legend(fontsize=9, loc='upper left', framealpha=0.7)
     plt.tight_layout()
     return fig
+
+
+# ── Combined all-sources plots ───────────────────────────────────────────
+
+def make_nanotech_pct_all_fig(df_all, sources):
+    """% of articles mentioning nanotech >= 1 time, all sources overlaid (3yr MA)."""
+    fig, ax = plt.subplots(figsize=(14, 5))
+    all_vals = []
+    for src in sources:
+        df = get_source_df(df_all, src)
+        name, color = SOURCE_INFO.get(src, (str(src), '#888888'))
+        raw = pct_per_year(df, df['Nanotech'] >= 1).values
+        smoothed = moving_avg(raw)
+        all_vals.extend([v for v in smoothed if not np.isnan(v)])
+        ax.plot(ALL_YEARS, smoothed, marker='o', markersize=3,
+                linewidth=1.8, color=color, label=name)
+    ax.set_title('% of articles mentioning nanotech (3yr MA) — All Sources',
+                 fontsize=12, fontweight='bold', pad=8)
+    ax.set_xlabel('Year', fontsize=10)
+    ax.set_ylabel('% of articles', fontsize=10)
+    ax.set_xticks(ALL_YEARS)
+    ax.set_xticklabels(ALL_YEARS, rotation=45, ha='right', fontsize=8)
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.grid(axis='y', linestyle='--', alpha=0.4)
+    smart_yticks(ax, all_vals, is_percent=True)
+    ax.legend(fontsize=8, loc='upper left', framealpha=0.7)
+    plt.tight_layout()
+    return fig
+
+
+def make_article_count_all_fig(df_all, sources):
+    """Number of articles per year, all sources overlaid (3yr MA)."""
+    fig, ax = plt.subplots(figsize=(14, 5))
+    all_vals = []
+    for src in sources:
+        df = get_source_df(df_all, src)
+        name, color = SOURCE_INFO.get(src, (str(src), '#888888'))
+        raw = df.groupby('Year').size().reindex(ALL_YEARS, fill_value=0).values.astype(float)
+        smoothed = moving_avg(raw)
+        all_vals.extend([v for v in smoothed if not np.isnan(v)])
+        ax.plot(ALL_YEARS, smoothed, marker='o', markersize=3,
+                linewidth=1.8, color=color, label=name)
+    ax.set_title('Article count per year (3yr MA) — All Sources',
+                 fontsize=12, fontweight='bold', pad=8)
+    ax.set_xlabel('Year', fontsize=10)
+    ax.set_ylabel('# of articles', fontsize=10)
+    ax.set_xticks(ALL_YEARS)
+    ax.set_xticklabels(ALL_YEARS, rotation=45, ha='right', fontsize=8)
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.grid(axis='y', linestyle='--', alpha=0.4)
+    smart_yticks(ax, all_vals, is_percent=False)
+    ax.legend(fontsize=8, loc='upper left', framealpha=0.7)
+    plt.tight_layout()
+    return fig
+
+
+def make_nanotech_total_all_fig(df_all, sources):
+    """Total nanotech mentions per year, all sources overlaid (3yr MA)."""
+    fig, ax = plt.subplots(figsize=(14, 5))
+    all_vals = []
+    for src in sources:
+        df = get_source_df(df_all, src)
+        name, color = SOURCE_INFO.get(src, (str(src), '#888888'))
+        raw = df.groupby('Year')['Nanotech'].sum().reindex(ALL_YEARS, fill_value=0).values.astype(float)
+        smoothed = moving_avg(raw)
+        all_vals.extend([v for v in smoothed if not np.isnan(v)])
+        ax.plot(ALL_YEARS, smoothed, marker='o', markersize=3,
+                linewidth=1.8, color=color, label=name)
+    ax.set_title('Total nanotech mentions per year (3yr MA) — All Sources',
+                 fontsize=12, fontweight='bold', pad=8)
+    ax.set_xlabel('Year', fontsize=10)
+    ax.set_ylabel('Total mentions', fontsize=10)
+    ax.set_xticks(ALL_YEARS)
+    ax.set_xticklabels(ALL_YEARS, rotation=45, ha='right', fontsize=8)
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.grid(axis='y', linestyle='--', alpha=0.4)
+    smart_yticks(ax, all_vals, is_percent=False)
+    ax.legend(fontsize=8, loc='upper left', framealpha=0.7)
+    plt.tight_layout()
+    return fig
+
+
+# ── Qualitative dimension plots ──────────────────────────────────────────
+
+def _qualitative_line_chart(df_all, sources, col, value, title, is_binary=False):
+    """Shared helper: line chart of a qualitative dimension across sources (3yr MA).
+
+    If is_binary, plots % where col >= 1 among non-null rows.
+    Otherwise, plots % where col == value among non-null rows.
+    """
+    fig, ax = plt.subplots(figsize=(14, 5))
+    all_vals = []
+    for src in sources:
+        df = get_source_df(df_all, src)
+        if col not in df.columns:
+            continue
+        coded = df[df[col].notna()]
+        if len(coded) == 0:
+            continue
+        name, color = SOURCE_INFO.get(src, (str(src), '#888888'))
+        if is_binary:
+            raw = pct_per_year_binary(df, col, threshold=1).values
+        else:
+            raw = pct_per_year_categorical(df, col, value).values
+        smoothed = moving_avg(raw)
+        all_vals.extend([v for v in smoothed if not np.isnan(v)])
+        ax.plot(ALL_YEARS, smoothed, marker='o', markersize=3,
+                linewidth=1.8, color=color, label=name)
+    ax.set_title(title, fontsize=12, fontweight='bold', pad=8)
+    ax.set_xlabel('Year', fontsize=10)
+    ax.set_ylabel('% of coded articles', fontsize=10)
+    ax.set_xticks(ALL_YEARS)
+    ax.set_xticklabels(ALL_YEARS, rotation=45, ha='right', fontsize=8)
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.grid(axis='y', linestyle='--', alpha=0.4)
+    smart_yticks(ax, all_vals, is_percent=True)
+    ax.legend(fontsize=8, loc='upper left', framealpha=0.7)
+    plt.tight_layout()
+    return fig
+
+
+def make_attitude_fig(df_all, sources, attitude_value='positive'):
+    """% of coded articles with given attitude value, per source over time."""
+    return _qualitative_line_chart(
+        df_all, sources, 'Attitude', attitude_value,
+        f'Attitude: % "{attitude_value}" articles (3yr MA) — All Sources',
+    )
+
+
+def make_analogy_presence_fig(df_all, sources):
+    """% of coded articles where an analogy is present, per source over time."""
+    return _qualitative_line_chart(
+        df_all, sources, 'Analogy Present', None,
+        'Analogy Presence: % of coded articles with an analogy (3yr MA) — All Sources',
+        is_binary=True,
+    )
+
+
+def make_analogy_temporality_fig(df_all, sources, temporality_value='future'):
+    """% of coded articles with given temporality, per source over time."""
+    return _qualitative_line_chart(
+        df_all, sources, 'Analogy Temporality (Coded)', temporality_value,
+        f'Analogy Temporality: % "{temporality_value}" (3yr MA) — All Sources',
+    )
+
+
+def make_sustaining_disrupting_fig(df_all, sources, value='disrupting'):
+    """% of coded articles with given sustaining/disrupting value, per source over time."""
+    return _qualitative_line_chart(
+        df_all, sources, 'Sustaining vs Disrupting', value,
+        f'Status Quo: % "{value}" (3yr MA) — All Sources',
+    )
+
+
+def make_funding_argument_fig(df_all, sources):
+    """% of coded articles with a funding argument present, per source over time."""
+    return _qualitative_line_chart(
+        df_all, sources, 'Funding Argument Present', None,
+        'Funding Argument: % of coded articles arguing for funding (3yr MA) — All Sources',
+        is_binary=True,
+    )

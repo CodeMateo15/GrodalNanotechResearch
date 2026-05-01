@@ -1,7 +1,38 @@
-- Remove 2026 filter
-
 - Make sure stars match reference article count
+	- Business has 4157 from reference, 1501 from rtf 2005 and 2654 from txt file (4155 in 		  total with stars), 4154 from output
+	- Business Press has 494 from reference, 493 with stars from txt file, 491 from output
+	- Futurists has 926 from reference, 1385 with dashes and 59 with stars from txt file, 
+	  926 from output
+		- The Futurists text file is split into 1,065 raw chunks using three separator
+		  types (dashes, asterisks, and Table of Contents headers), then reduced to 926
+		  articles by removing 30 boilerplate chunks (headers, short fragments), 8
+		  articles outside the 1983–2006 date range, and 101 exact duplicates reprinted
+		  across newsletter issues.
+	- Government has 926 from reference, 925 with stars from txt file, 906 from output
+	- Newspapers has 3762 from reference, 3758 with stars from txt file, 3449 from output
+	- Science News has 1407 from reference, 1236 with stars from txt file, 1222 from output
+	- Science Research has 1102 from reference, 1101 with stars from txt file, 1091 from 
+	  output
 
-- Use Claude to analyze: Can you also make graphs over time of how the communities different across the dimensions: 1) Attitude towards nanotechnology; 2) whether an analogy existed or not (all the cells with text needs to be coded as “1” and “none” needs to be coded as“0”; 3) Temporality of the analogy; 4) Whether nanotechnology is “sustaining” or “disrupting” the status quo, 6) whether the analogy is used to argue for more funding
+- Use Claude to analyze: Can you also make graphs over time of how the sources/communities different across the dimensions: 1) Attitude towards nanotechnology; 2) whether an analogy existed or not (all the cells with text needs to be coded as “1” and “none” needs to be coded as“0”; 3) Temporality of the analogy; 4) Whether nanotechnology is “sustaining” or “disrupting” the status quo, 6) whether the analogy is used to argue for more funding
+	- Use Qualitative Samples in output.xlsx as a start guide. Add a column(s) with what
+	  Claude has found out. Use Claude excel file (in Old Python Files folder) as reference
 
-- Match altered vs unaltered Claude excel file and output.xlsx, and import columns with Claude analysis
+  Prompt:                                                                       
+                                                         
+  ▎ For each row, read the Title and Body columns and add the following new 
+  ▎ columns:                                                                    
+  ▎
+  ▎ 1. Attitude — The article's attitude toward nanotechnology: "positive",     
+  ▎ "negative", "neutral", or "mixed"                    
+  ▎ 2. Analogy Present — 1 if the article uses an analogy or metaphor to        
+  ▎ explain/frame nanotechnology, 0 if not                                      
+  ▎ 3. Analogy Type — Short description of the analogy (e.g. "industrial 
+  ▎ revolution", "biological machinery"). Write "none" if Analogy Present is 0  
+  ▎ 4. Analogy Temporality — When the analogy's referent sits in time: "past", 
+  ▎ "present", "future", "timeless", or "NA" if no analogy                      
+  ▎ 5. Sustaining vs Disrupting — Is nanotechnology framed as "sustaining" 
+  ▎ existing industries or "disrupting" them? Use "both" or "neither" if        
+  ▎ applicable                                           
+  ▎ 6. Funding Argument — 1 if the article argues for more funding for          
+  ▎ nanotechnology, 0 if not

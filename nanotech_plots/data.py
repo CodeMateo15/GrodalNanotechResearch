@@ -81,6 +81,18 @@ def smart_yticks(ax, values, is_percent=True):
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.0f'))
 
 
+def pct_per_year_categorical(df, col, value):
+    """% of articles per year where col == value, among rows where col is non-null."""
+    coded = df[df[col].notna()].copy()
+    return pct_per_year(coded, coded[col] == value)
+
+
+def pct_per_year_binary(df, col, threshold=1):
+    """% of articles per year where col >= threshold, among rows where col is non-null."""
+    coded = df[df[col].notna()].copy()
+    return pct_per_year(coded, coded[col] >= threshold)
+
+
 def make_bar(ax, values, color, title, is_percent=True):
     ax.bar(ALL_YEARS, values, color=color, edgecolor='white', linewidth=0.5)
     ax.set_title(title, fontsize=12, fontweight='bold', pad=8)

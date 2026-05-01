@@ -27,6 +27,16 @@ KEYWORD_COLS = [
 # For co-occurrence analysis, exclude Nanotech/Nano to avoid self-referential 100%.
 COOCCURRENCE_COLS = [c for c in KEYWORD_COLS if c not in ('Nanotech', 'Nano')]
 
+# Qualitative coding columns (from Claude analysis import)
+QUALITATIVE_COLS = [
+    'Attitude', 'Analogy Present', 'Analogy Temporality (Coded)',
+    'Sustaining vs Disrupting', 'Funding Argument Present',
+]
+
+ATTITUDE_VALUES = ['positive', 'negative', 'neutral', 'mixed']
+TEMPORALITY_VALUES = ['past', 'present', 'future', 'mixed']
+SUSTAINING_VALUES = ['sustaining', 'disrupting', 'both']
+
 COLORS = [
     '#7C3AED', '#0891B2', '#D97706', '#059669', '#BE185D',
     '#1D4ED8', '#B45309', '#0F766E', '#9333EA', '#C2410C',

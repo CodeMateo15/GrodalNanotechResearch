@@ -8,7 +8,8 @@ don't need to know plot-specific parameters.
 from functools import partial
 
 from . import plots
-from .config import SOURCE_INFO, KEYWORD_COLS, COOCCURRENCE_COLS
+from .config import (SOURCE_INFO, KEYWORD_COLS, COOCCURRENCE_COLS,
+                     ATTITUDE_VALUES, TEMPORALITY_VALUES, SUSTAINING_VALUES)
 
 
 def _all_sources():
@@ -20,20 +21,35 @@ def build_registry():
     srcs = _all_sources()
     items = []
 
-    # Cell 20 — macro (summary)
+    # ── Combined all-sources plots (summary) ────────────────────────────
+    items.append((
+        'Article count per year (3yr MA) — All Sources',
+        partial(plots.make_article_count_all_fig, sources=srcs),
+        True,
+    ))
+    items.append((
+        '% of articles mentioning nanotech (3yr MA) — All Sources',
+        partial(plots.make_nanotech_pct_all_fig, sources=srcs),
+        True,
+    ))
+    items.append((
+        'Total nanotech mentions per year (3yr MA) — All Sources',
+        partial(plots.make_nanotech_total_all_fig, sources=srcs),
+        True,
+    ))
     items.append((
         'Macro – any keyword co-occurrence, all sources',
         partial(plots.make_any_keyword_macro_fig, sources=srcs),
         True,
     ))
 
-    # Cell 8 — % of articles mentioning nanotech, per source (summary)
+    # Cell 8 — % of articles mentioning nanotech, per source (full only)
     for src in srcs:
         name = SOURCE_INFO[src][0]
         items.append((
             f'{name} — % of articles mentioning nanotech',
             partial(plots.make_nanotech_pct_fig, src=src),
-            True,
+            False,
         ))
 
     # Cell 18 — Top 8 co-occurrence per source (summary for a few key sources)
@@ -99,6 +115,45 @@ def build_registry():
             partial(plots.make_cooccurrence_per_keyword_fig, sources=srcs, col=col),
             False,
         ))
+
+    # ── Qualitative dimension plots (summary) ────────────────────────────
+    # Attitude per value
+    for val in ATTITUDE_VALUES:
+        items.append((
+            f'Attitude — % "{val}" coded articles (all sources)',
+            partial(plots.make_attitude_fig, sources=srcs, attitude_value=val),
+            True,
+        ))
+
+    # Analogy presence
+    items.append((
+        'Analogy Presence — % of coded articles with an analogy (all sources)',
+        partial(plots.make_analogy_presence_fig, sources=srcs),
+        True,
+    ))
+
+    # Analogy temporality per value
+    for val in TEMPORALITY_VALUES:
+        items.append((
+            f'Analogy Temporality — % "{val}" (all sources)',
+            partial(plots.make_analogy_temporality_fig, sources=srcs, temporality_value=val),
+            True,
+        ))
+
+    # Sustaining vs Disrupting per value
+    for val in SUSTAINING_VALUES:
+        items.append((
+            f'Status Quo — % "{val}" (all sources)',
+            partial(plots.make_sustaining_disrupting_fig, sources=srcs, value=val),
+            True,
+        ))
+
+    # Funding argument
+    items.append((
+        'Funding Argument — % of coded articles arguing for funding (all sources)',
+        partial(plots.make_funding_argument_fig, sources=srcs),
+        True,
+    ))
 
     return items
 

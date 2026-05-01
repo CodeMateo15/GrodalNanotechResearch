@@ -31,7 +31,8 @@ FILE_SOURCE_MAP = {
 }
 
 YEAR_MIN = 1983
-YEAR_MAX = 2005
+# If you want to have 2006 years removed, add change 2006 to 2005
+YEAR_MAX = 2006
 
 OUTPUT_FILE = "output.xlsx"
 
